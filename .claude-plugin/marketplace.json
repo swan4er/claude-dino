@@ -1,0 +1,12 @@
+{
+  "name": "claude-dino",
+  "owner": { "name": "Станислав" },
+  "metadata": { "description": "claude-dino: динозаврик над строкой ввода Claude Code" },
+  "plugins": [
+    {
+      "name": "claude-dino",
+      "source": "./",
+      "description": "Игра про динозаврика над строкой ввода Claude Code, пока Claude работает"
+    }
+  ]
+}
