@@ -13,6 +13,8 @@ const run = (args: string) => ({ command: 'dino', args, origin: { kind: 'compose
 
 const BAND = {
   component: 'AbovePrompt',
+  // полноэкранный режим: maxRows — место, которое осталось полосе (на обычном экране это вся высота окна)
+  viewport: { columns: 100, rows: 40, isFullscreen: true },
   props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 100, scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
@@ -82,7 +84,7 @@ describe('register', () => {
 
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
     await $.command.run(run(''))
-    const ui = await $.ui.mount({ plugin: 'claude-dino', surface: 'terminal', component: 'AbovePrompt', props: { ...BAND.props, maxRows: 6 } })
+    const ui = await $.ui.mount({ plugin: 'claude-dino', surface: 'terminal', ...BAND, props: { ...BAND.props, maxRows: 6 } })
     expect(await ui.find({ type: 'Text', text: /низковато/ })).toBeDefined()
     expect(await ui.find({ type: 'Client' })).toBeUndefined()
     await ui.unmount()
@@ -97,7 +99,7 @@ describe('register', () => {
 
     await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
     await $.command.run(run(''))
-    const ui = await $.ui.mount({ plugin: 'claude-dino', surface: 'terminal', viewport: { columns: 100, rows: 40, isFullscreen: false }, ...BAND })
+    const ui = await $.ui.mount({ plugin: 'claude-dino', surface: 'terminal', ...BAND, viewport: { columns: 100, rows: 40, isFullscreen: false }, props: { ...BAND.props, maxRows: 40 } })
     expect(await ui.find({ type: 'Text', text: /tui fullscreen/, in: 'dino' })).toBeDefined()
     await ui.unmount()
   })

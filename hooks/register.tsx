@@ -1,6 +1,7 @@
 /* @jsx h */
 import type { Register } from 'claude-code'
 import { COMPACT, METRICS, MIN_BAND_ROWS, bandRows } from './game/dino.ts'
+import { bandRoom, gameRoom } from './band.ts'
 
 // Модуль хуков. Одна команда, /dino: открывает и закрывает игру над строкой ввода. Саму игру
 // рисует ./dino.tsx в потоке отрисовки; здесь — команда, рекорд в $.store и сигнал поверхности,
@@ -65,8 +66,10 @@ export const register: Register = on => {
     // игре нужны клавиши и мышь терминала; опрос занимает полосу сам
     if (!open || e.surface !== 'terminal' || e.props.hasSurvey) return next(e)
     // самый крупный набор спрайтов, которому полоса даёт место; иначе компактный, сколько влезет
-    const fitting = METRICS.find(m => e.props.maxRows >= bandRows(m)) ?? COMPACT
-    const rows = Math.min(bandRows(fitting), e.props.maxRows)
+    // полоса общая с другими модами: см. ./band.ts
+    const { room, beneath } = gameRoom(bandRoom(e.props.maxRows, e.viewport), await next(e), MIN_BAND_ROWS)
+    const fitting = METRICS.find(m => room >= bandRows(m)) ?? COMPACT
+    const rows = Math.min(bandRows(fitting), room)
     mouse = e.viewport?.isFullscreen !== false
     bandHeight = rows
     const { Box, Client, Text } = $.ui.resolve(e)
@@ -74,15 +77,15 @@ export const register: Register = on => {
     if (rows < MIN_BAND_ROWS) {
       return (
         <Box flexDirection="column">
-          <Text dimColor wrap="truncate-end">{`dino: окно низковато (над строкой ввода ${e.props.maxRows} строк из ${MIN_BAND_ROWS}) — растяните терминал до ~30 строк · /dino закрывает`}</Text>
-          {await next(e)}
+          <Text dimColor wrap="truncate-end">{`dino: окно низковато (над строкой ввода ${room} строк из ${MIN_BAND_ROWS}) — растяните терминал до ~30 строк · /dino закрывает`}</Text>
+          {beneath}
         </Box>
       )
     }
     return (
       <Box flexDirection="column">
         <Client key="dino" module="./dino.tsx" width={e.props.bodyColumns} height={rows} props={{ best, done: turnsDone, mouse, rows }} />
-        {await next(e)}
+        {beneath}
       </Box>
     )
   })

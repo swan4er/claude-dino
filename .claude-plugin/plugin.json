@@ -1,6 +1,6 @@
 {
   "name": "claude-dino",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Игра про динозаврика над строкой ввода Claude Code: /dino открывает и закрывает, пробел или клик — прыжок, при снятии с паузы — отсчёт 3 секунды. Нужны function hooks (ранний доступ) и терминал.",
   "author": { "name": "Станислав" },
   "keywords": ["game", "dino", "terminal", "tui", "function-hooks", "mod"]
