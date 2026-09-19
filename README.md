@@ -28,20 +28,66 @@
 
 ## Установка
 
-1. В `~/.claude/settings.json` добавить (или слить с существующим ключом `env`):
+1. **Включить function hooks.** В `~/.claude/settings.json` добавить (или слить с существующим
+   ключом `env`):
 
    ```json
    { "env": { "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1" } }
    ```
 
-2. Поставить плагин из папки — она сама себе marketplace:
+   Это включает модули хуков у **всех** установленных плагинов, а не только у этого. Без
+   переменной плагин поставится, но команды `/dino` не будет.
+
+2. **Поставить плагин из папки** — она сама себе marketplace:
 
    ```sh
    claude plugin marketplace add /путь/к/claude-dino
    claude plugin install claude-dino@claude-dino
    ```
 
-   Без установки, на один запуск: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir /путь/к/claude-dino`.
+3. **Проверить.** `claude plugin list` должен показать `claude-dino@claude-dino … enabled`.
+   Перезапустить `claude` в терминале, выполнить `/tui fullscreen`, затем `/dino`.
+
+Без установки, на один запуск (так же удобно разрабатывать — файлы подхватываются с диска):
+
+```sh
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir /путь/к/claude-dino
+```
+
+### Обновление
+
+Установленный плагин — это копия в `~/.claude/plugins/cache/`, правки в папке проекта в неё сами
+не попадают. Менеджер плагинов сравнивает **номер версии**: без его смены обновления не будет
+(«already at the latest version»).
+
+```sh
+# 1. поднять "version" в .claude-plugin/plugin.json
+claude plugin marketplace update claude-dino
+claude plugin update claude-dino@claude-dino
+# 2. перезапустить claude
+```
+
+Рекорд у установленного плагина и у запущенного через `--plugin-dir` хранится раздельно.
+
+### Удаление
+
+```sh
+claude plugin uninstall claude-dino@claude-dino
+claude plugin marketplace remove claude-dino
+```
+
+Переменную `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS` убирайте из настроек, только если других модов нет.
+
+### Если не работает
+
+- **`/dino` — неизвестная команда.** Не включены function hooks (шаг 1) или плагин не загружен
+  (`claude plugin list`). Причину отказа загрузки движок пишет тусклой строкой в транскрипте и
+  подробно — в лог: `claude --debug-file /tmp/dino.log`, искать `claude-dino`.
+- **На поле «НУЖНА МЫШЬ».** Claude Code в обычном режиме: выполните `/tui fullscreen` и откройте `/dino` снова.
+- **Клавиши уходят в строку ввода.** Сначала кликните по полю. Esc возвращает клавиатуру строке ввода.
+- **Клик не срабатывает.** Терминал не сообщает о мыши приложению (в tmux за это обычно отвечает `set -g mouse on`).
+- **Вместо игры строка «окно низковато».** Растяните окно терминала — см. таблицу выше.
+- **Между строками спрайта видны полоски.** Это межстрочный интервал терминала; ставится в 1.0 в его настройках.
 
 ## Как играть
 
