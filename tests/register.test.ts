@@ -73,6 +73,21 @@ describe('register', () => {
     expect(best.text).toContain('321')
   })
 
+  test('в низком окне вместо игры — строка с объяснением', async ($, on) => {
+    mock.clock(on)
+    mock.store(on, {})
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('command.register', ($, e) => ({ value: { command: e.name } }))
+    on('ui.render', { component: 'AbovePrompt' }, () => BENEATH)
+
+    await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
+    await $.command.run(run(''))
+    const ui = await $.ui.mount({ plugin: 'claude-dino', surface: 'terminal', component: 'AbovePrompt', props: { ...BAND.props, maxRows: 6 } })
+    expect(await ui.find({ type: 'Text', text: /низковато/ })).toBeDefined()
+    expect(await ui.find({ type: 'Client' })).toBeUndefined()
+    await ui.unmount()
+  })
+
   test('в обычном режиме терминала игра говорит, что нужна мышь', async ($, on) => {
     mock.clock(on)
     mock.store(on, {})

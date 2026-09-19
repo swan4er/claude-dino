@@ -1,12 +1,11 @@
 /* @jsx h */
 import type { Register } from 'claude-code'
+import { COMPACT, METRICS, MIN_BAND_ROWS, bandRows } from './game/dino.ts'
 
 // Модуль хуков. Одна команда, /dino: открывает и закрывает игру над строкой ввода. Саму игру
 // рисует ./dino.tsx в потоке отрисовки; здесь — команда, рекорд в $.store и сигнал поверхности,
 // что Claude закончил ход (она ставит игру на паузу). Команда отвечает сама, модель не вызывается;
 // её ответы движок сам подписывает именем плагина (`claude-dino: …`).
-
-const BAND_ROWS = 10 // восемь строк поля, земля, строка подсказки
 
 let open = false
 let best = 0
@@ -14,6 +13,8 @@ let best = 0
 let turnsDone = 0
 // false в обычном режиме терминала: кликов нет, игра не может получить клавиатуру и говорит об этом
 let mouse = true
+// высота области игры, как её запросил последний ui.render
+let bandHeight = 0
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -57,19 +58,30 @@ export const register: Register = on => {
       await $.store.set('best', best).catch(err => $.ui.log(`claude-dino: рекорд не сохранён: ${err}`))
       $.ui.toast(`dino: новый рекорд ${best}`)
     }
-    return { props: { best, done: turnsDone, mouse } }
+    return { props: { best, done: turnsDone, mouse, rows: bandHeight } }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     // игре нужны клавиши и мышь терминала; опрос занимает полосу сам
     if (!open || e.surface !== 'terminal' || e.props.hasSurvey) return next(e)
-    const rows = Math.min(BAND_ROWS, e.props.maxRows)
-    if (rows < 3) return next(e)
+    // самый крупный набор спрайтов, которому полоса даёт место; иначе компактный, сколько влезет
+    const fitting = METRICS.find(m => e.props.maxRows >= bandRows(m)) ?? COMPACT
+    const rows = Math.min(bandRows(fitting), e.props.maxRows)
     mouse = e.viewport?.isFullscreen !== false
-    const { Box, Client } = $.ui.resolve(e)
+    bandHeight = rows
+    const { Box, Client, Text } = $.ui.resolve(e)
+    // полосе достаётся примерно половина высоты терминала минус строка ввода с рамками
+    if (rows < MIN_BAND_ROWS) {
+      return (
+        <Box flexDirection="column">
+          <Text dimColor wrap="truncate-end">{`dino: окно низковато (над строкой ввода ${e.props.maxRows} строк из ${MIN_BAND_ROWS}) — растяните терминал до ~30 строк · /dino закрывает`}</Text>
+          {await next(e)}
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column">
-        <Client key="dino" module="./dino.tsx" width={e.props.bodyColumns} height={rows} props={{ best, done: turnsDone, mouse }} />
+        <Client key="dino" module="./dino.tsx" width={e.props.bodyColumns} height={rows} props={{ best, done: turnsDone, mouse, rows }} />
         {await next(e)}
       </Box>
     )

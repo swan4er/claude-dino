@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
-  COUNTDOWN_TICKS, DINO_HIT_LEFT, DINO_HIT_WIDTH, DINO_X, DUCK_TICKS, MAX_SPEED, START_SPEED, TICKS_PER_SECOND,
-  advance, airTicks, countdownLeft, duck, hits, isDucking, jump, newGame, pause, press, restart, score, speed, tick, togglePause,
-  type Game, type Obstacle,
+  COMPACT, COUNTDOWN_TICKS, DUCK_TICKS, LARGE, METRICS, TICKS_PER_SECOND,
+  advance, airTicks, bandRows, pickMetrics, countdownLeft, duck, hits, isDucking, jump, newGame, pause, press, restart, score, speed, tick, togglePause,
+  type Game, type Metrics, type Obstacle,
 } from '../hooks/game/dino.ts'
 
 // детерминированный генератор (mulberry32)
@@ -21,40 +21,59 @@ function seeded(seed: number): () => number {
 
 const never = () => 0
 // бегущая игра без препятствий на горизонте
-const running = (w = 100): Game => ({ ...newGame(w), mode: 'running', spawnIn: 1e9 })
+const running = (w = 100, m: Metrics = COMPACT): Game => ({ ...newGame(w, m), mode: 'running', spawnIn: 1e9 })
 const ticks = (g: Game, n: number, rand = never) => {
   for (let i = 0; i < n; i++) g = tick(g, rand)
   return g
 }
-const cactus = (x: number, over: Partial<Obstacle> = {}): Obstacle => ({ kind: 'cactus-small', x, w: 3, h: 2, alt: 0, ...over })
+const obstacle = (m: Metrics, kind: Obstacle['kind'], x: number): Obstacle => ({ kind, x, ...m.shapes[kind] })
+const cactus = (x: number, m: Metrics = COMPACT): Obstacle => obstacle(m, 'cactus-small', x)
 
-describe('прыжок', () => {
-  test('поднимает, возвращает на землю и длится airTicks', () => {
-    let g = jump(running())
-    let peak = 0
-    let n = 0
-    do {
-      g = tick(g)
-      peak = Math.max(peak, g.y)
-      n++
-    } while (g.y > 0)
-    assert.equal(n, airTicks())
-    assert.ok(peak > 4 && peak < 5, `высота прыжка ${peak}`)
-    assert.ok(n / TICKS_PER_SECOND > 0.55 && n / TICKS_PER_SECOND < 0.8, `прыжок ${n} тиков`)
-    assert.equal(g.vy, 0)
-  })
-
-  test('в воздухе второй прыжок не срабатывает', () => {
-    const g = tick(jump(running()))
-    assert.equal(jump(g), g)
-  })
-
-  test('↓ в воздухе ускоряет падение', () => {
-    const plain = ticks(jump(running()), 8)
-    const fast = ticks(duck(ticks(jump(running()), 4)), 4)
-    assert.ok(fast.y < plain.y)
+describe('выбор набора по высоте полосы', () => {
+  test('крупный — когда хватает строк, иначе компактный', () => {
+    assert.equal(bandRows(COMPACT), 11)
+    assert.equal(bandRows(LARGE), 15)
+    assert.equal(pickMetrics(40), LARGE)
+    assert.equal(pickMetrics(15), LARGE)
+    assert.equal(pickMetrics(14), COMPACT)
+    assert.equal(pickMetrics(11), COMPACT)
+    assert.equal(pickMetrics(5), COMPACT)
   })
 })
+
+for (const m of METRICS) {
+  describe(`прыжок · ${m.name}`, () => {
+    test('поднимает, возвращает на землю, длится airTicks и помещается в поле', () => {
+      let g = jump(running(100, m))
+      let peak = 0
+      let n = 0
+      do {
+        g = tick(g)
+        peak = Math.max(peak, g.y)
+        n++
+      } while (g.y > 0)
+      assert.equal(n, airTicks(m))
+      assert.ok(n / TICKS_PER_SECOND > 0.55 && n / TICKS_PER_SECOND < 0.8, `прыжок ${n} тиков`)
+      assert.equal(g.vy, 0)
+      // выше самого высокого кактуса с запасом в строку, но не выше поля
+      const tallest = Math.max(m.shapes['cactus-small'].h, m.shapes['cactus-large'].h, m.shapes['cactus-group'].h)
+      assert.ok(peak >= tallest + 0.99, `пик ${peak} против кактуса ${tallest}`)
+      assert.ok(m.dinoH + peak <= m.fieldRows + 0.05, `макушка на ${m.dinoH + peak} при поле ${m.fieldRows}`)
+      for (const shape of Object.values(m.shapes)) assert.ok(shape.alt + shape.h <= m.fieldRows)
+    })
+
+    test('в воздухе второй прыжок не срабатывает', () => {
+      const g = tick(jump(running(100, m)))
+      assert.equal(jump(g), g)
+    })
+
+    test('↓ в воздухе ускоряет падение', () => {
+      const plain = ticks(jump(running(100, m)), 8)
+      const fast = ticks(duck(ticks(jump(running(100, m)), 4)), 4)
+      assert.ok(fast.y < plain.y)
+    })
+  })
+}
 
 describe('пригибание', () => {
   test('держится DUCK_TICKS и продлевается повторным нажатием', () => {
@@ -73,70 +92,75 @@ describe('пригибание', () => {
   })
 })
 
-describe('столкновения', () => {
-  const at = DINO_X + DINO_HIT_LEFT
-  test('кактус в хитбоксе — столкновение, рядом — нет', () => {
-    const g = running()
-    assert.ok(hits(g, cactus(at)))
-    assert.ok(!hits(g, cactus(at + DINO_HIT_WIDTH)))
-    assert.ok(!hits(g, cactus(at - 3)))
+for (const m of METRICS) {
+  describe(`столкновения · ${m.name}`, () => {
+    const at = m.dinoX + m.hitLeft
+    const small = m.shapes['cactus-small']
+
+    test('кактус в хитбоксе — столкновение, рядом — нет', () => {
+      const g = running(100, m)
+      assert.ok(hits(g, cactus(at, m)))
+      assert.ok(!hits(g, cactus(at + m.hitWidth, m)))
+      assert.ok(!hits(g, cactus(at - small.w, m)))
+    })
+
+    test('прыжок выше кактуса с допуском в полстроки проходит', () => {
+      assert.ok(hits({ ...running(100, m), y: small.h - 0.6 }, cactus(at, m)))
+      assert.ok(!hits({ ...running(100, m), y: small.h - 0.5 }, cactus(at, m)))
+    })
+
+    test('под средней птицей проходит только пригнувшийся, низкую надо перепрыгнуть', () => {
+      const mid = obstacle(m, 'bird-mid', at)
+      const low = obstacle(m, 'bird-low', at)
+      assert.ok(hits(running(100, m), mid))
+      assert.ok(!hits(duck(running(100, m)), mid))
+      assert.ok(hits(duck(running(100, m)), low))
+      assert.ok(!hits({ ...running(100, m), y: low.alt + low.h - 0.4 }, low))
+    })
+
+    test('столкновение в тике заканчивает игру, дальше мир стоит', () => {
+      const g = tick({ ...running(100, m), obstacles: [cactus(at + 1, m)] })
+      assert.equal(g.mode, 'over')
+      assert.equal(tick(g), g)
+    })
   })
 
-  test('прыжок выше кактуса с допуском в полстроки проходит', () => {
-    assert.ok(hits({ ...running(), y: 1.4 }, cactus(at)))
-    assert.ok(!hits({ ...running(), y: 1.5 }, cactus(at)))
-  })
+  describe(`скорость, счёт и препятствия · ${m.name}`, () => {
+    test('скорость растёт с дистанцией до потолка', () => {
+      assert.equal(speed(running(100, m)), m.startSpeed)
+      assert.ok(speed({ ...running(100, m), distance: 1000 }) > m.startSpeed)
+      assert.equal(speed({ ...running(100, m), distance: 1e7 }), m.maxSpeed)
+    })
 
-  test('под средней птицей проходит только пригнувшийся, низкую надо перепрыгнуть', () => {
-    const mid = cactus(at, { kind: 'bird-mid', w: 5, alt: 2 })
-    const low = cactus(at, { kind: 'bird-low', w: 5, alt: 1 })
-    assert.ok(hits(running(), mid))
-    assert.ok(!hits(duck(running()), mid))
-    assert.ok(hits(duck(running()), low))
-    assert.ok(!hits({ ...running(), y: 2.6 }, low))
-  })
+    test('очки в секунду на старте одинаковы у всех наборов', () => {
+      const perSecond = (x: Metrics) => (x.startSpeed * TICKS_PER_SECOND) / x.columnsPerPoint
+      assert.ok(Math.abs(perSecond(m) - perSecond(COMPACT)) < 0.05, `${perSecond(m)}`)
+    })
 
-  test('столкновение в тике заканчивает игру, дальше мир стоит', () => {
-    const g = tick({ ...running(), obstacles: [cactus(at + 1)] })
-    assert.equal(g.mode, 'over')
-    assert.equal(tick(g), g)
-  })
-})
+    test('птицы не появляются до 150 очков, группы — до своей скорости', () => {
+      const rand = seeded(7)
+      let g: Game = { ...running(100, m), spawnIn: 0 }
+      const kinds = new Set<string>()
+      for (let i = 0; i < 2000 && score(g) < 150 && speed(g) < m.groupsFromSpeed; i++) {
+        g = tick({ ...g, mode: 'running', y: 50 }, rand)
+        g.obstacles.forEach(o => kinds.add(o.kind))
+      }
+      assert.deepEqual([...kinds].sort(), ['cactus-large', 'cactus-small'])
+    })
 
-describe('скорость, счёт и препятствия', () => {
-  test('скорость растёт с дистанцией до потолка', () => {
-    assert.equal(speed(running()), START_SPEED)
-    assert.ok(speed({ ...running(), distance: 1000 }) > START_SPEED)
-    assert.equal(speed({ ...running(), distance: 1e7 }), MAX_SPEED)
+    test('между препятствиями не меньше полутора путей прыжка', () => {
+      const rand = seeded(11)
+      let g: Game = { ...running(400, m), spawnIn: 0, distance: 3000 }
+      for (let i = 0; i < 400; i++) g = tick({ ...g, mode: 'running', y: 50 }, rand)
+      const xs = [...g.obstacles].sort((a, b) => a.x - b.x)
+      assert.ok(xs.length >= 2)
+      for (let i = 1; i < xs.length; i++) {
+        const gap = xs[i].x - (xs[i - 1].x + xs[i - 1].w)
+        assert.ok(gap >= m.startSpeed * airTicks(m) * 1.5 - 1e-9, `зазор ${gap}`)
+      }
+    })
   })
-
-  test('счёт — дистанция / 4', () => {
-    assert.equal(score({ ...running(), distance: 401 }), 100)
-  })
-
-  test('птицы не появляются до 150 очков, группы — до скорости 2', () => {
-    const rand = seeded(7)
-    let g: Game = { ...running(), spawnIn: 0 }
-    const kinds = new Set<string>()
-    for (let i = 0; i < 2000 && score(g) < 150; i++) {
-      g = tick({ ...g, mode: 'running' }, rand)
-      g.obstacles.forEach(o => kinds.add(o.kind))
-    }
-    assert.deepEqual([...kinds].sort(), ['cactus-large', 'cactus-small'])
-  })
-
-  test('между препятствиями не меньше полутора путей прыжка', () => {
-    const rand = seeded(11)
-    let g: Game = { ...running(300), spawnIn: 0, distance: 3000 }
-    for (let i = 0; i < 400; i++) g = tick({ ...g, mode: 'running', y: 50 }, rand)
-    const xs = g.obstacles.map(o => o).sort((a, b) => a.x - b.x)
-    assert.ok(xs.length >= 2)
-    for (let i = 1; i < xs.length; i++) {
-      const gap = xs[i].x - (xs[i - 1].x + xs[i - 1].w)
-      assert.ok(gap >= START_SPEED * airTicks() * 1.5 - 1e-9, `зазор ${gap}`)
-    }
-  })
-})
+}
 
 describe('режимы', () => {
   test('ready: первое нажатие запускает игру с прыжка, без отсчёта', () => {
@@ -150,6 +174,9 @@ describe('режимы', () => {
     assert.equal(g.mode, 'running')
     assert.equal(g.distance, 0)
     assert.equal(restart(g).mode, 'running')
+    // размер нового раунда можно сменить, посреди раунда он остаётся прежним
+    assert.equal(press({ ...running(), mode: 'over' }, LARGE).m, LARGE)
+    assert.equal(press(running(), LARGE).m, COMPACT)
   })
 
   test('в ready, paused и over мир стоит', () => {
@@ -282,28 +309,30 @@ describe('реальное время (advance)', () => {
 })
 
 // Бот играет по простому правилу. Если он доживает до потолка скорости на разных зёрнах и
-// ширинах — физика, размеры препятствий и зазоры проходимы.
-describe('проходимость', () => {
-  function bot(g: Game): Game {
-    const left = DINO_X + DINO_HIT_LEFT
-    const o = g.obstacles.filter(o => o.x + o.w > left).sort((a, b) => a.x - b.x)[0]
-    if (!o) return g
-    const v = speed(g)
-    if (o.kind === 'bird-mid') return o.x - (left + DINO_HIT_WIDTH) < v * 4 ? duck(g) : g
-    // прыжок так, чтобы вершина пришлась на середину препятствия
-    const ticksToCentre = (o.x + o.w / 2 - (left + DINO_HIT_WIDTH / 2)) / v
-    return ticksToCentre <= airTicks() / 2 ? jump(g) : g
-  }
-
-  for (const w of [60, 120, 200]) {
-    for (const seed of [1, 2, 3, 4, 5]) {
-      test(`ширина ${w}, зерно ${seed}: бот набирает 3000 очков`, () => {
-        const rand = seeded(seed)
-        let g = press(newGame(w))
-        for (let i = 0; i < 40000 && g.mode === 'running' && score(g) < 3000; i++) g = tick(bot(g), rand)
-        assert.equal(g.mode, 'running', `погиб на ${score(g)} очках, скорость ${speed(g).toFixed(2)}, у ${JSON.stringify(g.obstacles[0])}`)
-        assert.equal(speed(g), MAX_SPEED)
-      })
+// ширинах — физика, размеры препятствий и зазоры набора проходимы.
+for (const m of METRICS) {
+  describe(`проходимость · ${m.name}`, () => {
+    function bot(g: Game): Game {
+      const left = m.dinoX + m.hitLeft
+      const o = g.obstacles.filter(o => o.x + o.w > left).sort((a, b) => a.x - b.x)[0]
+      if (!o) return g
+      const v = speed(g)
+      if (o.kind === 'bird-mid') return o.x - (left + m.hitWidth) < v * 4 ? duck(g) : g
+      // прыжок так, чтобы вершина пришлась на середину препятствия
+      const ticksToCentre = (o.x + o.w / 2 - (left + m.hitWidth / 2)) / v
+      return ticksToCentre <= airTicks(m) / 2 ? jump(g) : g
     }
-  }
-})
+
+    for (const w of [60, 120, 200]) {
+      for (const seed of [1, 2, 3, 4, 5]) {
+        test(`ширина ${w}, зерно ${seed}: бот набирает 3000 очков`, () => {
+          const rand = seeded(seed)
+          let g = press(newGame(w, m))
+          for (let i = 0; i < 60000 && g.mode === 'running' && score(g) < 3000; i++) g = tick(bot(g), rand)
+          assert.equal(g.mode, 'running', `погиб на ${score(g)} очках, скорость ${speed(g).toFixed(2)}, у ${JSON.stringify(g.obstacles[0])}`)
+          assert.equal(speed(g), m.maxSpeed)
+        })
+      }
+    }
+  })
+}

@@ -11,40 +11,94 @@ export const TICKS_PER_SECOND = 1000 / TICK_MS
 export const COUNTDOWN_SECONDS = 3
 export const COUNTDOWN_TICKS = COUNTDOWN_SECONDS * TICKS_PER_SECOND
 
-// колонка левого края спрайта динозавра и его хитбокс (уже спрайта: столкновения «прощающие»)
-export const DINO_X = 4
-export const DINO_HIT_LEFT = 1
-export const DINO_HIT_WIDTH = 4
-export const DINO_HEIGHT = 3
-export const DUCK_HEIGHT = 2
-
-// подобрано так, чтобы прыжок длился ~0,7 с и поднимал на ~4,5 строки; проходимость при этих
-// числах доказывает тест с ботом (tests/dino.spec.ts)
-export const JUMP_VELOCITY = 1.4
-export const GRAVITY = 0.19
-// ↓ в воздухе — быстрое падение
-const FAST_FALL = 0.35
+// вертикальный допуск столкновения, строк: столкновения «прощающие», как в оригинале
+const TOLERANCE = 0.5
 // терминал не сообщает, что клавишу отпустили: нажатие ↓ пригибает на это время, автоповтор
 // удерживаемой клавиши продлевает. 0,6 с перекрывают задержку перед автоповтором (~0,5 с)
 export const DUCK_TICKS = 12
-
-export const START_SPEED = 1.5 // колонок за тик
-export const MAX_SPEED = 3
-const SPEED_PER_COLUMN = 1 / 2500
-// очко за каждые столько колонок пути
-const COLUMNS_PER_POINT = 4
-// вертикальный допуск столкновения, строк
-const TOLERANCE = 0.5
-
 const BIRDS_FROM_SCORE = 150
-const GROUPS_FROM_SPEED = 2
+
+export type ObstacleKind = 'cactus-small' | 'cactus-large' | 'cactus-group' | 'bird-low' | 'bird-mid'
+// размеры в клетках; alt — высота нижнего края над землёй
+export type Shape = { w: number; h: number; alt: number }
+
+// Набор размеров: всё, что зависит от величины спрайтов. Логика читает числа только отсюда,
+// поэтому новый размер или персонаж — это данные (набор + картинки в sprites.ts), а не правка кода.
+// Проходимость каждого набора доказывает тест с ботом (tests/dino.spec.ts).
+export type Metrics = {
+  name: string
+  // строк поля над землёй: рост динозавра + высота прыжка
+  fieldRows: number
+  // колонка левого края спрайта; хитбокс уже спрайта
+  dinoX: number
+  dinoW: number
+  dinoH: number
+  duckW: number
+  duckH: number
+  hitLeft: number
+  hitWidth: number
+  // прыжок длится ~0,7 с при любом размере, меняется только высота
+  jumpVelocity: number
+  gravity: number
+  // ↓ в воздухе — быстрое падение
+  fastFall: number
+  // колонок за тик; крупный мир движется быстрее, иначе над широким кактусом не пролететь
+  startSpeed: number
+  maxSpeed: number
+  speedPerColumn: number
+  // очко за каждые столько колонок пути: очки в секунду одинаковы у всех наборов
+  columnsPerPoint: number
+  groupsFromSpeed: number
+  shapes: Record<ObstacleKind, Shape>
+}
+
+// динозавр 7×4 клетки, полоса 11 строк
+export const COMPACT: Metrics = {
+  name: 'compact',
+  fieldRows: 9,
+  dinoX: 4, dinoW: 7, dinoH: 4, duckW: 9, duckH: 2.5, hitLeft: 1, hitWidth: 5,
+  jumpVelocity: 1.4, gravity: 0.19, fastFall: 0.35,
+  startSpeed: 1.5, maxSpeed: 3, speedPerColumn: 1 / 2500, columnsPerPoint: 4, groupsFromSpeed: 2,
+  shapes: {
+    'cactus-small': { w: 3, h: 2, alt: 0 },
+    'cactus-large': { w: 4, h: 3, alt: 0 },
+    'cactus-group': { w: 8, h: 2, alt: 0 },
+    // низкую птицу перепрыгивают, под средней пригибаются
+    'bird-low': { w: 6, h: 2, alt: 1 },
+    'bird-mid': { w: 6, h: 2, alt: 3 },
+  },
+}
+
+// динозавр 10×7 клеток, полоса 15 строк
+export const LARGE: Metrics = {
+  name: 'large',
+  fieldRows: 13,
+  dinoX: 4, dinoW: 10, dinoH: 7, duckW: 13, duckH: 4, hitLeft: 2, hitWidth: 6,
+  jumpVelocity: 1.875, gravity: 0.2545, fastFall: 0.47,
+  startSpeed: 2.2, maxSpeed: 4.2, speedPerColumn: 1 / 1800, columnsPerPoint: 5.87, groupsFromSpeed: 2.9,
+  shapes: {
+    'cactus-small': { w: 4, h: 4, alt: 0 },
+    'cactus-large': { w: 5, h: 5, alt: 0 },
+    'cactus-group': { w: 9, h: 4, alt: 0 },
+    'bird-low': { w: 8, h: 3, alt: 1 },
+    'bird-mid': { w: 8, h: 3, alt: 5 },
+  },
+}
+
+// крупный набор — когда полоса над строкой ввода даёт ему место, иначе компактный
+export const METRICS: readonly Metrics[] = [LARGE, COMPACT]
+// строк полосы: поле, земля, строка подсказки
+export const bandRows = (m: Metrics) => m.fieldRows + 2
+// ниже этого игра не открывается: в поле не помещается даже компактный динозавр с половиной прыжка.
+// Строка подсказки и верх прыжка — первое, чем игра жертвует в низком окне
+export const MIN_BAND_ROWS = 8
+export const pickMetrics = (rows: number): Metrics => METRICS.find(m => rows >= bandRows(m)) ?? COMPACT
 
 export type Mode = 'ready' | 'running' | 'paused' | 'countdown' | 'over'
-export type ObstacleKind = 'cactus-small' | 'cactus-large' | 'cactus-group' | 'bird-low' | 'bird-mid'
-// alt — высота нижнего края над землёй
-export type Obstacle = { kind: ObstacleKind; x: number; w: number; h: number; alt: number }
+export type Obstacle = Shape & { kind: ObstacleKind; x: number }
 
 export type Game = {
+  m: Metrics
   w: number
   mode: Mode
   // тиков до конца отсчёта; имеет смысл только в режиме countdown
@@ -60,39 +114,30 @@ export type Game = {
   ticks: number
 }
 
-const SHAPES: Record<ObstacleKind, { w: number; h: number; alt: number }> = {
-  'cactus-small': { w: 3, h: 2, alt: 0 },
-  'cactus-large': { w: 3, h: 3, alt: 0 },
-  'cactus-group': { w: 7, h: 2, alt: 0 },
-  // низкую птицу перепрыгивают, под средней пригибаются
-  'bird-low': { w: 5, h: 2, alt: 1 },
-  'bird-mid': { w: 5, h: 2, alt: 2 },
+export function newGame(w: number, m: Metrics = COMPACT): Game {
+  return { m, w, mode: 'ready', countdown: 0, y: 0, vy: 0, duckTicks: 0, obstacles: [], distance: 0, spawnIn: w * 0.6, ticks: 0 }
 }
 
-export function newGame(w: number): Game {
-  return { w, mode: 'ready', countdown: 0, y: 0, vy: 0, duckTicks: 0, obstacles: [], distance: 0, spawnIn: w * 0.6, ticks: 0 }
-}
-
-export const score = (g: Game) => Math.floor(g.distance / COLUMNS_PER_POINT)
-export const speed = (g: Game) => Math.min(MAX_SPEED, START_SPEED + g.distance * SPEED_PER_COLUMN)
+export const score = (g: Game) => Math.floor(g.distance / g.m.columnsPerPoint)
+export const speed = (g: Game) => Math.min(g.m.maxSpeed, g.m.startSpeed + g.distance * g.m.speedPerColumn)
 export const isDucking = (g: Game) => g.duckTicks > 0 && g.y === 0
 // 3, 2, 1 — что показывать во время отсчёта; 0 вне его
 export const countdownLeft = (g: Game) => (g.mode === 'countdown' ? Math.ceil(g.countdown / TICKS_PER_SECOND) : 0)
 
 // длительность прыжка в тиках: сколько тиков динозавр не на земле
-export function airTicks(): number {
+export function airTicks(m: Metrics): number {
   let y = 0
-  let vy = JUMP_VELOCITY
+  let vy = m.jumpVelocity
   let n = 0
   do {
-    vy -= GRAVITY
+    vy -= m.gravity
     y += vy
     n++
   } while (y > 0)
   return n
 }
 
-export const jump = (g: Game): Game => (g.mode === 'running' && g.y === 0 ? { ...g, vy: JUMP_VELOCITY, duckTicks: 0 } : g)
+export const jump = (g: Game): Game => (g.mode === 'running' && g.y === 0 ? { ...g, vy: g.m.jumpVelocity, duckTicks: 0 } : g)
 export const duck = (g: Game): Game => (g.mode === 'running' ? { ...g, duckTicks: DUCK_TICKS } : g)
 
 const startCountdown = (g: Game): Game => ({ ...g, mode: 'countdown', countdown: COUNTDOWN_TICKS })
@@ -106,11 +151,12 @@ export function togglePause(g: Game): Game {
   return pause(g)
 }
 
-export const restart = (g: Game): Game => jump({ ...newGame(g.w), mode: 'running' })
+// размер выбирается на раунд: посреди игры он не меняется, даже если терминал растянули
+export const restart = (g: Game, m: Metrics = g.m): Game => jump({ ...newGame(g.w, m), mode: 'running' })
 
 // пробел, ↑ или клик: старт, прыжок, снятие с паузы (через отсчёт) или новая игра после столкновения
-export function press(g: Game): Game {
-  if (g.mode === 'ready' || g.mode === 'over') return restart(g)
+export function press(g: Game, m: Metrics = g.m): Game {
+  if (g.mode === 'ready' || g.mode === 'over') return restart(g, m)
   if (g.mode === 'paused') return startCountdown(g)
   // во время отсчёта нажатия ничего не делают: прыжок «в запас» не копится
   return jump(g)
@@ -118,23 +164,23 @@ export function press(g: Game): Game {
 
 function spawn(g: Game, rand: () => number): Obstacle {
   const kinds: ObstacleKind[] = ['cactus-small', 'cactus-large']
-  if (speed(g) >= GROUPS_FROM_SPEED) kinds.push('cactus-group')
+  if (speed(g) >= g.m.groupsFromSpeed) kinds.push('cactus-group')
   if (score(g) >= BIRDS_FROM_SCORE) kinds.push('bird-low', 'bird-mid')
   const kind = kinds[Math.min(kinds.length - 1, Math.floor(rand() * kinds.length))]
-  return { kind, x: g.w, ...SHAPES[kind] }
+  return { kind, x: g.w, ...g.m.shapes[kind] }
 }
 
 // между препятствиями не меньше пути, который динозавр пролетает за прыжок, с запасом на
 // приземление и реакцию; сверху — случайная добавка
 function gapAfter(g: Game, rand: () => number): number {
-  const jumpPath = speed(g) * airTicks()
+  const jumpPath = speed(g) * airTicks(g.m)
   return jumpPath * 1.5 + rand() * jumpPath * 1.5
 }
 
 export function hits(g: Game, o: Obstacle): boolean {
-  const left = DINO_X + DINO_HIT_LEFT
-  if (o.x >= left + DINO_HIT_WIDTH || o.x + o.w <= left) return false
-  const top = g.y + (isDucking(g) ? DUCK_HEIGHT : DINO_HEIGHT)
+  const left = g.m.dinoX + g.m.hitLeft
+  if (o.x >= left + g.m.hitWidth || o.x + o.w <= left) return false
+  const top = g.y + (isDucking(g) ? g.m.duckH : g.m.dinoH)
   return g.y < o.alt + o.h - TOLERANCE && top > o.alt + TOLERANCE
 }
 
@@ -148,7 +194,7 @@ export function tick(g: Game, rand: () => number = Math.random): Game {
   let vy = g.vy
   let y = g.y
   if (y > 0 || vy > 0) {
-    vy -= GRAVITY + (g.duckTicks > 0 ? FAST_FALL : 0)
+    vy -= g.m.gravity + (g.duckTicks > 0 ? g.m.fastFall : 0)
     y += vy
     if (y <= 0) {
       y = 0
