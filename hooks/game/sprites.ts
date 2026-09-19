@@ -20,6 +20,26 @@ export type SpriteSet = {
 // общий верх и сменные ноги: кадры бега отличаются только нижними строками
 const withLegs = (body: Bitmap, legs: Bitmap): Bitmap => [...body, ...legs]
 
+// Ноги как в оригинале — буквой «Г»: голень и ступня вперёд. В беге они не шагают, а по очереди
+// поднимаются: одна стоит целиком, у второй ступня на ряд выше. Голени шириной в клетку стоят на
+// чётных пикселях, иначе рисуются двумя половинками.
+type Legs = { stand: Bitmap; run: readonly [Bitmap, Bitmap] }
+// в компактном наборе голень тонкая, в пиксель: вместе со ступнёй это одна клетка «▙»
+const COMPACT_LEGS: Legs = {
+  stand: ['....#...#.....', '....##..##....'],
+  run: [
+    ['....#...##....', '....##........'],
+    ['....##..#.....', '........##....'],
+  ],
+}
+const LARGE_LEGS: Legs = {
+  stand: ['....##..##..........', '....###.###.........'],
+  run: [
+    ['....##..###.........', '....###.............'],
+    ['....###.##..........', '........###.........'],
+  ],
+}
+
 const COMPACT_BODY: Bitmap = [
   '.......######.',
   '......##.#####',
@@ -53,7 +73,7 @@ const LARGE_BODY: Bitmap = [
   '###..############...',
   '###############.#...',
   '.#############......',
-  '...##########.......',
+  '...####..###........',
 ]
 const LARGE_DEAD_BODY: Bitmap = ['...........########.', '..........#..#######', '..........#..#######', ...LARGE_BODY.slice(3)]
 const LARGE_DUCK_BODY: Bitmap = [
@@ -77,15 +97,15 @@ const row = (gap: number, ...maps: Bitmap[]): Bitmap =>
 
 export const SPRITES: Record<string, SpriteSet> = {
   compact: {
-    stand: withLegs(COMPACT_BODY, ['...###.###....', '...##...##....']),
+    stand: withLegs(COMPACT_BODY, COMPACT_LEGS.stand),
     run: [
-      withLegs(COMPACT_BODY, ['...###..###...', '...##.........']),
-      withLegs(COMPACT_BODY, ['....###.##....', '........##....']),
+      withLegs(COMPACT_BODY, COMPACT_LEGS.run[0]),
+      withLegs(COMPACT_BODY, COMPACT_LEGS.run[1]),
     ],
-    dead: withLegs(COMPACT_DEAD_BODY, ['...###.###....', '...##...##....']),
+    dead: withLegs(COMPACT_DEAD_BODY, COMPACT_LEGS.stand),
     duck: [
-      withLegs(COMPACT_DUCK_BODY, ['..############....', '...##...###.......']),
-      withLegs(COMPACT_DUCK_BODY, ['..############....', '....###..#........']),
+      withLegs(COMPACT_DUCK_BODY, COMPACT_LEGS.run[0].map(line => line + '....')),
+      withLegs(COMPACT_DUCK_BODY, COMPACT_LEGS.run[1].map(line => line + '....')),
     ],
     obstacles: {
       'cactus-small': [COMPACT_CACTUS],
@@ -96,15 +116,15 @@ export const SPRITES: Record<string, SpriteSet> = {
     },
   },
   large: {
-    stand: withLegs(LARGE_BODY, ['....###.###.........', '....##...##.........']),
+    stand: withLegs(LARGE_BODY, LARGE_LEGS.stand),
     run: [
-      withLegs(LARGE_BODY, ['....###..###........', '....##..............']),
-      withLegs(LARGE_BODY, ['.....###.##.........', '.........##.........']),
+      withLegs(LARGE_BODY, LARGE_LEGS.run[0]),
+      withLegs(LARGE_BODY, LARGE_LEGS.run[1]),
     ],
-    dead: withLegs(LARGE_DEAD_BODY, ['....###.###.........', '....##...##.........']),
+    dead: withLegs(LARGE_DEAD_BODY, LARGE_LEGS.stand),
     duck: [
-      withLegs(LARGE_DUCK_BODY, ['...####..###..............', '...##.....................']),
-      withLegs(LARGE_DUCK_BODY, ['....###.####..............', '.........##...............']),
+      withLegs(LARGE_DUCK_BODY, LARGE_LEGS.run[0].map(line => line + '......')),
+      withLegs(LARGE_DUCK_BODY, LARGE_LEGS.run[1].map(line => line + '......')),
     ],
     obstacles: {
       'cactus-small': [LARGE_CACTUS_SMALL],
@@ -119,7 +139,8 @@ export const SPRITES: Record<string, SpriteSet> = {
   },
 }
 
-const LEG_TICKS = 3
+// смена ног раз в 100 мс: в оригинале 12 кадров бега в секунду, терминал рисует ~16
+const LEG_TICKS = 2
 const WING_TICKS = 6
 
 // пиксели клетки → символ: биты 1, 2, 4, 8 — левый верхний, правый верхний, левый нижний, правый нижний
