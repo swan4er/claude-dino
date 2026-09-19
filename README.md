@@ -38,15 +38,18 @@
    Это включает модули хуков у **всех** установленных плагинов, а не только у этого. Без
    переменной плагин поставится, но команды `/dino` не будет.
 
-2. **Поставить плагин из папки** — она сама себе marketplace:
+2. **Поставить плагин с GitHub** — репозиторий сам себе marketplace (каталог плагинов из одного плагина):
 
    ```sh
-   claude plugin marketplace add /путь/к/claude-dino
+   claude plugin marketplace add swan4er/claude-dino
    claude plugin install claude-dino@claude-dino
    ```
 
 3. **Проверить.** `claude plugin list` должен показать `claude-dino@claude-dino … enabled`.
    Перезапустить `claude` в терминале, выполнить `/tui fullscreen`, затем `/dino`.
+
+Из своей копии (для правок): `git clone https://github.com/swan4er/claude-dino`, дальше те же две команды,
+но вместо `swan4er/claude-dino` — путь к папке.
 
 Без установки, на один запуск (так же удобно разрабатывать — файлы подхватываются с диска):
 
